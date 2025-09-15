@@ -33,14 +33,75 @@ const ALLOW = [
 function processGitHubEmails() {
   const threads = GmailApp.search(QUERY, 0, MAX_THREADS);
   const processedLabel = getOrCreateLabel(PROCESSED);
+  let threadsConsidered = 0;
+  let processedCount = 0;
+  let labelsAppliedCount = 0;
 
   threads.forEach(thread => {
+    threadsConsidered++;
     try {
       const message = thread.getMessages().pop();
       const header = getGitHubLabelsHeader(message);
       if (!header) {
-        thread.addLabel(processedLabel);
         return;
+      }
+
+      // Parse labels split by ";" or "," outside quotes
+      const parsed = splitQuotedMulti(header, [';', ',']);
+
+      const seen = new Set();
+      let hasNeedsSig = false;
+      let hasSigLabel = false;
+
+      for (const raw of parsed) {
+        const lbl = raw.trim();
+        if (!lbl) continue;
+
+        const key = lbl.toLowerCase();
+        if (seen.has(key)) continue;
+        seen.add(key);
+
+        if (key === 'needs-sig') {
+          hasNeedsSig = true;
+        }
+        if (key.startsWith('sig/')) {
+          hasSigLabel = true;
+        }
+
+        if (isAllowed(lbl)) {
+          const finalSegment = KEEP_SLASHES ? lbl : lbl.replace(/\//g, '／');
+          thread.addLabel(getOrCreateLabel(`${ROOT_PREFIX}${finalSegment}`));
+          labelsAppliedCount++;
+        }
+      }
+
+      // Only mark as processed if it has a sig label and not 'needs-sig'.
+      if (!hasNeedsSig && hasSigLabel) {
+        thread.addLabel(processedLabel);
+        processedCount++;
+      }
+    } catch (e) {
+      console.log(`Error processing thread ${thread.getId()}: ${e && e.message}`);
+    }
+  });
+
+  console.log(`Processing complete. Considered: ${threadsConsidered}, Processed: ${processedCount}, Labels applied: ${labelsAppliedCount}`);
+}
+
+function reprocessForSigNode() {
+  const sigNodeLabelName = ROOT_PREFIX + (KEEP_SLASHES ? 'sig/node' : 'sig/node'.replace(/\//g, '／'));
+  const query = `label:"${PROCESSED}" -label:"${sigNodeLabelName}"`;
+  const threads = GmailApp.search(query, 0, MAX_THREADS);
+  let threadsConsidered = 0;
+  let labelsReappliedCount = 0;
+
+  threads.forEach(thread => {
+    threadsConsidered++;
+    try {
+      const message = thread.getMessages().pop();
+      const header = getGitHubLabelsHeader(message);
+      if (!header) {
+        return; // Nothing to do if no labels header
       }
 
       // Parse labels split by ";" or "," outside quotes
@@ -56,19 +117,18 @@ function processGitHubEmails() {
         if (seen.has(key)) continue;
         seen.add(key);
 
-        if (!isAllowed(lbl)) continue; // <- only apply allowed labels
-
-        const finalSegment = KEEP_SLASHES ? lbl : lbl.replace(/\//g, '／');
-        thread.addLabel(getOrCreateLabel(`${ROOT_PREFIX}${finalSegment}`));
+        if (isAllowed(lbl)) {
+          const finalSegment = KEEP_SLASHES ? lbl : lbl.replace(/\//g, '／');
+          thread.addLabel(getOrCreateLabel(`${ROOT_PREFIX}${finalSegment}`));
+          labelsReappliedCount++;
+        }
       }
-
-      // mark as processed so future runs skip it (without changing read state)
-      thread.addLabel(processedLabel);
-
     } catch (e) {
-      console.log(`Error processing thread ${thread.getId()}: ${e && e.message}`);
+      console.log(`Error reprocessing thread ${thread.getId()}: ${e && e.message}`);
     }
   });
+
+  console.log(`Reprocessing complete. Re-evaluated: ${threadsConsidered}, Labels re-applied: ${labelsReappliedCount}`);
 }
 
 // ---- Helpers ----
@@ -169,6 +229,7 @@ function escapeRe(s) {
 
 // Manual runner
 function test() { processGitHubEmails(); }
+function testReprocess() { reprocessForSigNode(); }
 
 /**
  * Sets up a time-based trigger to run the processGitHubEmails function every 5 minutes.
@@ -192,4 +253,28 @@ function setup() {
     .create();
   
   console.log(`Trigger created for ${functionName} to run every 5 minutes.`);
+}
+
+/**
+ * Sets up a time-based trigger to run the reprocessForSigNode function every hour.
+ * This function should be run once after deploying the script.
+ * It deletes any existing triggers for the function to prevent duplicates.
+ */
+function setupReprocessTrigger() {
+  const functionName = 'reprocessForSigNode';
+  
+  // Delete existing triggers for this function to prevent duplicates
+  ScriptApp.getProjectTriggers().forEach(trigger => {
+    if (trigger.getHandlerFunction() === functionName) {
+      ScriptApp.deleteTrigger(trigger);
+    }
+  });
+
+  // Create a new trigger to run every hour
+  ScriptApp.newTrigger(functionName)
+    .timeBased()
+    .everyHours(1)
+    .create();
+  
+  console.log(`Trigger created for ${functionName} to run every hour.`);
 }
