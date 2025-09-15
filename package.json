@@ -1,0 +1,14 @@
+{
+  "name": "github-labels-in-gmail",
+  "version": "1.0.0",
+  "description": "An Apps Script to automatically apply Gmail labels from GitHub notification emails.",
+  "private": true,
+  "scripts": {
+    "login": "npx clasp login",
+    "create": "npx clasp create --title \"GitHub Email Labels\" --rootDir .",
+    "push": "npx clasp push"
+  },
+  "devDependencies": {
+    "@google/clasp": "^2.4.2"
+  }
+}
