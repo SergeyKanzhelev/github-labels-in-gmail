@@ -33,6 +33,7 @@ const ALLOW = [
 function processGitHubEmails() {
   const threads = GmailApp.search(QUERY, 0, MAX_THREADS);
   const processedLabel = getOrCreateLabel(PROCESSED);
+  const otherSigLabel = getOrCreateLabel(`${ROOT_PREFIX}other-sig`);
   let threadsConsidered = 0;
   let processedCount = 0;
   let labelsAppliedCount = 0;
@@ -52,6 +53,8 @@ function processGitHubEmails() {
       const seen = new Set();
       let hasNeedsSig = false;
       let hasSigLabel = false;
+      let hasOtherSig = false;
+      let hasAllowedSig = false;
 
       for (const raw of parsed) {
         const lbl = raw.trim();
@@ -66,6 +69,11 @@ function processGitHubEmails() {
         }
         if (key.startsWith('sig/')) {
           hasSigLabel = true;
+          if (!isAllowed(lbl)) {
+            hasOtherSig = true;
+          } else {
+            hasAllowedSig = true
+          }
         }
 
         if (isAllowed(lbl)) {
@@ -73,6 +81,11 @@ function processGitHubEmails() {
           thread.addLabel(getOrCreateLabel(`${ROOT_PREFIX}${finalSegment}`));
           labelsAppliedCount++;
         }
+      }
+
+      if (hasOtherSig && !hasAllowedSig) {
+        thread.addLabel(otherSigLabel);
+        labelsAppliedCount++;
       }
 
       // Only mark as processed if it has a sig label and not 'needs-sig'.
@@ -88,9 +101,25 @@ function processGitHubEmails() {
   console.log(`Processing complete. Considered: ${threadsConsidered}, Processed: ${processedCount}, Labels applied: ${labelsAppliedCount}`);
 }
 
-function reprocessForSigNode() {
-  const sigNodeLabelName = ROOT_PREFIX + (KEEP_SLASHES ? 'sig/node' : 'sig/node'.replace(/\//g, '／'));
-  const query = `label:"${PROCESSED}" -label:"${sigNodeLabelName}"`;
+function reprocessMissingSigLabels() {
+  const otherSigLabelName = `${ROOT_PREFIX}other-sig`;
+  const otherSigLabel = getOrCreateLabel(otherSigLabelName);
+  let query = `label:"${PROCESSED}" -label:"${otherSigLabelName}"`;
+
+  // Exclude threads that already have an allowed sig label.
+  const allowedSigs = ALLOW.filter(p => p.toLowerCase().startsWith('sig/'));
+  for (const pat of allowedSigs) {
+    let labelName = pat.toLowerCase();
+    // For globs like 'sig/docs*', we exclude the base label name. This isn't perfect
+    // but prevents reprocessing for the most common cases.
+    if (labelName.endsWith('*')) {
+      labelName = labelName.slice(0, -1);
+    }
+    const finalSegment = KEEP_SLASHES ? labelName : labelName.replace(/\//g, '／');
+    const fullLabelName = `${ROOT_PREFIX}${finalSegment}`;
+    query += ` -label:"${fullLabelName}"`;
+  }
+
   const threads = GmailApp.search(query, 0, MAX_THREADS);
   let threadsConsidered = 0;
   let labelsReappliedCount = 0;
@@ -109,6 +138,8 @@ function reprocessForSigNode() {
 
       // Trim + de-dupe (case-insensitive), then filter by ALLOW
       const seen = new Set();
+      let hasOtherSig = false;
+      let hasAllowedSig = false;
       for (const raw of parsed) {
         const lbl = raw.trim();
         if (!lbl) continue;
@@ -117,11 +148,24 @@ function reprocessForSigNode() {
         if (seen.has(key)) continue;
         seen.add(key);
 
+        if (key.startsWith('sig/')) {
+          if (!isAllowed(lbl)) {
+            hasOtherSig = true;
+          } else {
+            hasAllowedSig = true;
+          }
+        }
+
         if (isAllowed(lbl)) {
           const finalSegment = KEEP_SLASHES ? lbl : lbl.replace(/\//g, '／');
           thread.addLabel(getOrCreateLabel(`${ROOT_PREFIX}${finalSegment}`));
           labelsReappliedCount++;
         }
+      }
+
+      if (hasOtherSig && !hasAllowedSig) {
+        thread.addLabel(otherSigLabel);
+        labelsReappliedCount++;
       }
     } catch (e) {
       console.log(`Error reprocessing thread ${thread.getId()}: ${e && e.message}`);
@@ -229,7 +273,7 @@ function escapeRe(s) {
 
 // Manual runner
 function test() { processGitHubEmails(); }
-function testReprocess() { reprocessForSigNode(); }
+function testReprocess() { reprocessMissingSigLabels(); }
 
 /**
  * Sets up a time-based trigger to run the processGitHubEmails function every 5 minutes.
@@ -256,12 +300,12 @@ function setup() {
 }
 
 /**
- * Sets up a time-based trigger to run the reprocessForSigNode function every hour.
+ * Sets up a time-based trigger to run the reprocessMissingSigLabels function every hour.
  * This function should be run once after deploying the script.
  * It deletes any existing triggers for the function to prevent duplicates.
  */
 function setupReprocessTrigger() {
-  const functionName = 'reprocessForSigNode';
+  const functionName = 'reprocessMissingSigLabels';
   
   // Delete existing triggers for this function to prevent duplicates
   ScriptApp.getProjectTriggers().forEach(trigger => {
