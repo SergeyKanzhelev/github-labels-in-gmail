@@ -8,7 +8,7 @@
  */
 
 const QUERY        = 'from:notifications@github.com newer_than:30d -label:"gh/processed"';
-const MAX_THREADS  = 100;
+const MAX_THREADS  = 500;
 const ROOT_PREFIX  = 'gh/';
 const PROCESSED    = 'gh/processed';
 const KEEP_SLASHES = true; // true -> nested labels (gh/area/kubelet). false -> replace "/" with fullwidth slash.
@@ -31,71 +31,80 @@ const ALLOW = [
 ];
 
 function processGitHubEmails() {
-  const threads = GmailApp.search(QUERY, 0, MAX_THREADS);
   const processedLabel = getOrCreateLabel(PROCESSED);
   const otherSigLabel = getOrCreateLabel(`${ROOT_PREFIX}other-sig`);
   let threadsConsidered = 0;
   let processedCount = 0;
   let labelsAppliedCount = 0;
+  let offset = 0;
+  let threads;
 
-  threads.forEach(thread => {
-    threadsConsidered++;
-    try {
-      const message = thread.getMessages().pop();
-      const header = getGitHubLabelsHeader(message);
-      if (!header) {
-        return;
-      }
+  while (true) {
+    threads = GmailApp.search(QUERY, offset, MAX_THREADS);
+    if (threads.length === 0) {
+      break;
+    }
+    offset += threads.length;
 
-      // Parse labels split by ";" or "," outside quotes
-      const parsed = splitQuotedMulti(header, [';', ',']);
-
-      const seen = new Set();
-      let hasNeedsSig = false;
-      let hasSigLabel = false;
-      let hasOtherSig = false;
-      let hasAllowedSig = false;
-
-      for (const raw of parsed) {
-        const lbl = raw.trim();
-        if (!lbl) continue;
-
-        const key = lbl.toLowerCase();
-        if (seen.has(key)) continue;
-        seen.add(key);
-
-        if (key === 'needs-sig') {
-          hasNeedsSig = true;
+    threads.forEach(thread => {
+      threadsConsidered++;
+      try {
+        const message = thread.getMessages().pop();
+        const header = getGitHubLabelsHeader(message);
+        if (!header) {
+          return;
         }
-        if (key.startsWith('sig/')) {
-          hasSigLabel = true;
-          if (!isAllowed(lbl)) {
-            hasOtherSig = true;
-          } else {
-            hasAllowedSig = true
+
+        // Parse labels split by ";" or "," outside quotes
+        const parsed = splitQuotedMulti(header, [';', ',']);
+
+        const seen = new Set();
+        let hasNeedsSig = false;
+        let hasSigLabel = false;
+        let hasOtherSig = false;
+        let hasAllowedSig = false;
+
+        for (const raw of parsed) {
+          const lbl = raw.trim();
+          if (!lbl) continue;
+
+          const key = lbl.toLowerCase();
+          if (seen.has(key)) continue;
+          seen.add(key);
+
+          if (key === 'needs-sig') {
+            hasNeedsSig = true;
+          }
+          if (key.startsWith('sig/')) {
+            hasSigLabel = true;
+            if (!isAllowed(lbl)) {
+              hasOtherSig = true;
+            } else {
+              hasAllowedSig = true
+            }
+          }
+
+          if (isAllowed(lbl)) {
+            thread.addLabel(getOrCreateLabel(formatLabelName(lbl)));
+            labelsAppliedCount++;
           }
         }
 
-        if (isAllowed(lbl)) {
-          thread.addLabel(getOrCreateLabel(formatLabelName(lbl)));
+        if (hasOtherSig && !hasAllowedSig) {
+          thread.addLabel(otherSigLabel);
           labelsAppliedCount++;
         }
-      }
 
-      if (hasOtherSig && !hasAllowedSig) {
-        thread.addLabel(otherSigLabel);
-        labelsAppliedCount++;
+        // Only mark as processed if it has a sig label and not 'needs-sig'.
+        if (!hasNeedsSig && hasSigLabel) {
+          thread.addLabel(processedLabel);
+          processedCount++;
+        }
+      } catch (e) {
+        console.log(`Error processing thread ${thread.getId()}: ${e && e.message}`);
       }
-
-      // Only mark as processed if it has a sig label and not 'needs-sig'.
-      if (!hasNeedsSig && hasSigLabel) {
-        thread.addLabel(processedLabel);
-        processedCount++;
-      }
-    } catch (e) {
-      console.log(`Error processing thread ${thread.getId()}: ${e && e.message}`);
-    }
-  });
+    });
+  }
 
   console.log(`Processing complete. Considered: ${threadsConsidered}, Processed: ${processedCount}, Labels applied: ${labelsAppliedCount}`);
 }
@@ -118,56 +127,65 @@ function reprocessMissingSigLabels() {
     query += ` -label:"${fullLabelName}"`;
   }
 
-  const threads = GmailApp.search(query, 0, MAX_THREADS);
   let threadsConsidered = 0;
   let labelsReappliedCount = 0;
+  let offset = 0;
+  let threads;
 
-  threads.forEach(thread => {
-    threadsConsidered++;
-    try {
-      const message = thread.getMessages().pop();
-      const header = getGitHubLabelsHeader(message);
-      if (!header) {
-        return; // Nothing to do if no labels header
-      }
+  while (true) {
+    threads = GmailApp.search(query, offset, MAX_THREADS);
+    if (threads.length === 0) {
+      break;
+    }
+    offset += threads.length;
 
-      // Parse labels split by ";" or "," outside quotes
-      const parsed = splitQuotedMulti(header, [';', ',']);
+    threads.forEach(thread => {
+      threadsConsidered++;
+      try {
+        const message = thread.getMessages().pop();
+        const header = getGitHubLabelsHeader(message);
+        if (!header) {
+          return; // Nothing to do if no labels header
+        }
 
-      // Trim + de-dupe (case-insensitive), then filter by ALLOW
-      const seen = new Set();
-      let hasOtherSig = false;
-      let hasAllowedSig = false;
-      for (const raw of parsed) {
-        const lbl = raw.trim();
-        if (!lbl) continue;
+        // Parse labels split by ";" or "," outside quotes
+        const parsed = splitQuotedMulti(header, [';', ',']);
 
-        const key = lbl.toLowerCase();
-        if (seen.has(key)) continue;
-        seen.add(key);
+        // Trim + de-dupe (case-insensitive), then filter by ALLOW
+        const seen = new Set();
+        let hasOtherSig = false;
+        let hasAllowedSig = false;
+        for (const raw of parsed) {
+          const lbl = raw.trim();
+          if (!lbl) continue;
 
-        if (key.startsWith('sig/')) {
-          if (!isAllowed(lbl)) {
-            hasOtherSig = true;
-          } else {
-            hasAllowedSig = true;
+          const key = lbl.toLowerCase();
+          if (seen.has(key)) continue;
+          seen.add(key);
+
+          if (key.startsWith('sig/')) {
+            if (!isAllowed(lbl)) {
+              hasOtherSig = true;
+            } else {
+              hasAllowedSig = true;
+            }
+          }
+
+          if (isAllowed(lbl)) {
+            thread.addLabel(getOrCreateLabel(formatLabelName(lbl)));
+            labelsReappliedCount++;
           }
         }
 
-        if (isAllowed(lbl)) {
-          thread.addLabel(getOrCreateLabel(formatLabelName(lbl)));
+        if (hasOtherSig && !hasAllowedSig) {
+          thread.addLabel(otherSigLabel);
           labelsReappliedCount++;
         }
+      } catch (e) {
+        console.log(`Error reprocessing thread ${thread.getId()}: ${e && e.message}`);
       }
-
-      if (hasOtherSig && !hasAllowedSig) {
-        thread.addLabel(otherSigLabel);
-        labelsReappliedCount++;
-      }
-    } catch (e) {
-      console.log(`Error reprocessing thread ${thread.getId()}: ${e && e.message}`);
-    }
-  });
+    });
+  }
 
   console.log(`Reprocessing complete. Re-evaluated: ${threadsConsidered}, Labels re-applied: ${labelsReappliedCount}`);
 }
