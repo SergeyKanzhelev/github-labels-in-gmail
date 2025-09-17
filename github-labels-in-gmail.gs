@@ -77,8 +77,7 @@ function processGitHubEmails() {
         }
 
         if (isAllowed(lbl)) {
-          const finalSegment = KEEP_SLASHES ? lbl : lbl.replace(/\//g, '／');
-          thread.addLabel(getOrCreateLabel(`${ROOT_PREFIX}${finalSegment}`));
+          thread.addLabel(getOrCreateLabel(formatLabelName(lbl)));
           labelsAppliedCount++;
         }
       }
@@ -115,8 +114,7 @@ function reprocessMissingSigLabels() {
     if (labelName.endsWith('*')) {
       labelName = labelName.slice(0, -1);
     }
-    const finalSegment = KEEP_SLASHES ? labelName : labelName.replace(/\//g, '／');
-    const fullLabelName = `${ROOT_PREFIX}${finalSegment}`;
+    const fullLabelName = formatLabelName(labelName);
     query += ` -label:"${fullLabelName}"`;
   }
 
@@ -157,8 +155,7 @@ function reprocessMissingSigLabels() {
         }
 
         if (isAllowed(lbl)) {
-          const finalSegment = KEEP_SLASHES ? lbl : lbl.replace(/\//g, '／');
-          thread.addLabel(getOrCreateLabel(`${ROOT_PREFIX}${finalSegment}`));
+          thread.addLabel(getOrCreateLabel(formatLabelName(lbl)));
           labelsReappliedCount++;
         }
       }
@@ -267,6 +264,13 @@ function getOrCreateLabel(name) {
   return label;
 }
 
+// Centralized label name formatter
+function formatLabelName(label) {
+  const finalSegment = KEEP_SLASHES ? label : label.replace(/\//g, '／');
+  return `${ROOT_PREFIX}${finalSegment}`;
+}
+
+
 function escapeRe(s) {
   return String(s).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
@@ -276,49 +280,41 @@ function test() { processGitHubEmails(); }
 function testReprocess() { reprocessMissingSigLabels(); }
 
 /**
- * Sets up a time-based trigger to run the processGitHubEmails function every 5 minutes.
- * This function should be run once after deploying the script.
- * It deletes any existing triggers for the function to prevent duplicates.
+ * Sets up all time-based triggers for the script.
+ * This function should be run once after deploying or updating the script.
+ * It deletes all existing triggers to prevent duplicates and then creates fresh ones.
  */
 function setup() {
-  const functionName = 'processGitHubEmails';
-  
-  // Delete existing triggers for this function to prevent duplicates
+  // Configuration for all triggers
+  const triggers = [
+    { functionName: 'processGitHubEmails', frequencyHours: 1 / 12 }, // 5 minutes
+    { functionName: 'reprocessMissingSigLabels', frequencyHours: 1 },      // 1 hour
+  ];
+
+  // Delete all existing project triggers to have a clean slate
   ScriptApp.getProjectTriggers().forEach(trigger => {
-    if (trigger.getHandlerFunction() === functionName) {
-      ScriptApp.deleteTrigger(trigger);
-    }
+    ScriptApp.deleteTrigger(trigger);
   });
+  console.log('Deleted all existing triggers.');
 
-  // Create a new trigger to run every 5 minutes
-  ScriptApp.newTrigger(functionName)
-    .timeBased()
-    .everyMinutes(5)
-    .create();
-  
-  console.log(`Trigger created for ${functionName} to run every 5 minutes.`);
-}
+  // Create new triggers based on the configuration
+  triggers.forEach(config => {
+    const { functionName, frequencyHours } = config;
+    const triggerBuilder = ScriptApp.newTrigger(functionName).timeBased();
 
-/**
- * Sets up a time-based trigger to run the reprocessMissingSigLabels function every hour.
- * This function should be run once after deploying the script.
- * It deletes any existing triggers for the function to prevent duplicates.
- */
-function setupReprocessTrigger() {
-  const functionName = 'reprocessMissingSigLabels';
-  
-  // Delete existing triggers for this function to prevent duplicates
-  ScriptApp.getProjectTriggers().forEach(trigger => {
-    if (trigger.getHandlerFunction() === functionName) {
-      ScriptApp.deleteTrigger(trigger);
+    const frequencyText =
+      frequencyHours < 1
+        ? `${Math.round(frequencyHours * 60)} minutes`
+        : `${frequencyHours} hour(s)`;
+
+    if (frequencyHours < 1) {
+      triggerBuilder.everyMinutes(Math.round(frequencyHours * 60));
+    } else {
+      triggerBuilder.everyHours(frequencyHours);
     }
+    triggerBuilder.create();
+    console.log(`Trigger created for ${functionName} to run every ${frequencyText}.`);
   });
-
-  // Create a new trigger to run every hour
-  ScriptApp.newTrigger(functionName)
-    .timeBased()
-    .everyHours(1)
-    .create();
   
-  console.log(`Trigger created for ${functionName} to run every hour.`);
+  console.log('All triggers have been set up successfully.');
 }
