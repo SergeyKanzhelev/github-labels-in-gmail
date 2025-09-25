@@ -30,7 +30,36 @@ const ALLOW = [
   'do-not-merge/work-in-progress',
 ];
 
+// Global cache for Gmail labels to avoid API limits.
+const LABEL_CACHE = {};
+let IS_CACHE_INITIALIZED = false;
+
+/**
+ * Initializes the label cache by fetching all user labels from Gmail.
+ * This should be called once at the beginning of any script execution.
+ * @returns {boolean} True if the cache was initialized successfully, false otherwise.
+ */
+function initLabelCache() {
+  if (IS_CACHE_INITIALIZED) {
+    return true;
+  }
+  try {
+    GmailApp.getUserLabels().forEach(label => {
+      LABEL_CACHE[label.getName()] = label;
+    });
+    IS_CACHE_INITIALIZED = true;
+    console.log('Label cache initialized successfully.');
+    return true;
+  } catch (e) {
+    console.log(`FATAL: Error initializing label cache: ${e.message}. Aborting execution.`);
+    return false;
+  }
+}
+
 function processGitHubEmails() {
+  if (!initLabelCache()) {
+    return; // Exit if cache initialization fails.
+  }
   const processedLabel = getOrCreateLabel(PROCESSED);
   const otherSigLabel = getOrCreateLabel(`${ROOT_PREFIX}other-sig`);
   let threadsConsidered = 0;
@@ -110,6 +139,9 @@ function processGitHubEmails() {
 }
 
 function reprocessMissingSigLabels() {
+  if (!initLabelCache()) {
+    return; // Exit if cache initialization fails.
+  }
   const otherSigLabelName = `${ROOT_PREFIX}other-sig`;
   const otherSigLabel = getOrCreateLabel(otherSigLabelName);
   let query = `label:"${PROCESSED}" -label:"${otherSigLabelName}"`;
@@ -275,40 +307,26 @@ function isAllowed(label) {
   return false;
 }
 
-// Labels are created lazily and cached to avoid API limits.
-const getOrCreateLabel = (() => {
-  const cache = {};
-  let initialized = false;
-
-  // Fetches all user labels once and stores them in a cache.
-  function initCache() {
-    if (initialized) return;
-    try {
-      GmailApp.getUserLabels().forEach(label => {
-        cache[label.getName()] = label;
-      });
-      initialized = true;
-    } catch (e) {
-      console.log(`Error initializing label cache: ${e.message}`);
-    }
+/**
+ * Gets a Gmail label by name from the cache, creating it if it doesn't exist.
+ * Relies on the global LABEL_CACHE, which must be initialized first via initLabelCache().
+ * @param {string} name The name of the label.
+ * @returns {GmailApp.Label} The label object.
+ */
+function getOrCreateLabel(name) {
+  if (LABEL_CACHE[name]) {
+    return LABEL_CACHE[name];
   }
-
-  return (name) => {
-    initCache();
-    if (cache[name]) {
-      return cache[name];
-    }
-    // If it's not in the cache, it needs to be created.
-    try {
-      const label = GmailApp.createLabel(name);
-      cache[name] = label;
-      return label;
-    } catch (e) {
-      console.log(`Error creating label "${name}": ${e.message}`);
-      throw e;
-    }
-  };
-})();
+  // If it's not in the cache, it needs to be created.
+  try {
+    const label = GmailApp.createLabel(name);
+    LABEL_CACHE[name] = label;
+    return label;
+  } catch (e) {
+    console.log(`Error creating label "${name}": ${e.message}`);
+    throw e; // Re-throw, as this is a significant issue during processing.
+  }
+}
 
 // Centralized label name formatter
 function formatLabelName(label) {
