@@ -275,12 +275,40 @@ function isAllowed(label) {
   return false;
 }
 
-// Labels are created lazily; idempotent
-function getOrCreateLabel(name) {
-  let label = GmailApp.getUserLabelByName(name);
-  if (!label) label = GmailApp.createLabel(name);
-  return label;
-}
+// Labels are created lazily and cached to avoid API limits.
+const getOrCreateLabel = (() => {
+  const cache = {};
+  let initialized = false;
+
+  // Fetches all user labels once and stores them in a cache.
+  function initCache() {
+    if (initialized) return;
+    try {
+      GmailApp.getUserLabels().forEach(label => {
+        cache[label.getName()] = label;
+      });
+      initialized = true;
+    } catch (e) {
+      console.log(`Error initializing label cache: ${e.message}`);
+    }
+  }
+
+  return (name) => {
+    initCache();
+    if (cache[name]) {
+      return cache[name];
+    }
+    // If it's not in the cache, it needs to be created.
+    try {
+      const label = GmailApp.createLabel(name);
+      cache[name] = label;
+      return label;
+    } catch (e) {
+      console.log(`Error creating label "${name}": ${e.message}`);
+      throw e;
+    }
+  };
+})();
 
 // Centralized label name formatter
 function formatLabelName(label) {
