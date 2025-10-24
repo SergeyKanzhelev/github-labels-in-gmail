@@ -69,24 +69,29 @@ This is an alternative to the manual installation steps above.
 1. **Install dependencies**:
 
    ```bash
-   npm install
+   make install
    ```
 
 2. **Login to clasp**:
 
    ```bash
-   npm run login
+   make login
    ```
 
 3. **Create the script project**:
    This will create a new Apps Script project in your Google Drive and a `.clasp.json` file in this directory.
 
    ```bash
-   npm run create
+   make create
    ```
 
 4. **Push the code**:
 
    ```bash
-   npm run push
+   make push
    ```
+
+5. **Run setup**:
+   After the first push, you need to run the `setup` function once from the Apps Script editor to create the trigger that will automatically process your emails. See the "Automate (Setup)" section above for details.
+
+   TODO: enable execution via makefile on push. See this guide: https://github.com/google/clasp/blob/master/docs/run.md

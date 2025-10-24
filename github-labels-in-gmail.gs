@@ -339,46 +339,52 @@ function escapeRe(s) {
   return String(s).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
 
-// Manual runner
-function test() { processGitHubEmails(); }
-function testReprocess() { reprocessMissingSigLabels(); }
+/**
+ * Wrapper function to run all processing tasks.
+ * This is the target for all time-based triggers.
+ */
+function processAll() {
+  processGitHubEmails();
+  reprocessMissingSigLabels();
+}
 
 /**
- * Sets up all time-based triggers for the script.
- * This function should be run once after deploying or updating the script.
- * It deletes all existing triggers to prevent duplicates and then creates fresh ones.
+ * Creates triggers to run the script on a schedule.
+ * Deletes any existing triggers before creating new ones.
+ *
+ * The script will run:
+ * - Every 10 minutes between 8:00 AM and 8:50 AM.
+ * - Every hour between 9:00 AM and 6:00 PM (18:00).
  */
 function setup() {
-  // Configuration for all triggers
-  const triggers = [
-    { functionName: 'processGitHubEmails', frequencyHours: 1 / 12 }, // 5 minutes
-    { functionName: 'reprocessMissingSigLabels', frequencyHours: 1 },      // 1 hour
-  ];
-
-  // Delete all existing project triggers to have a clean slate
-  ScriptApp.getProjectTriggers().forEach(trigger => {
+  // Deletes all triggers in the current project.
+  const triggers = ScriptApp.getProjectTriggers();
+  for (const trigger of triggers) {
     ScriptApp.deleteTrigger(trigger);
-  });
+  }
   console.log('Deleted all existing triggers.');
 
-  // Create new triggers based on the configuration
-  triggers.forEach(config => {
-    const { functionName, frequencyHours } = config;
-    const triggerBuilder = ScriptApp.newTrigger(functionName).timeBased();
+  // Create triggers to run every 10 minutes between 8am and 9am.
+  for (let minute = 0; minute < 60; minute += 10) {
+    ScriptApp.newTrigger('processAll')
+        .timeBased()
+        .atHour(8)
+        .nearMinute(minute)
+        .everyDays(1)
+        .create();
+  }
+  console.log('Created triggers to run every 10 minutes between 8am and 9am.');
 
-    const frequencyText =
-      frequencyHours < 1
-        ? `${Math.round(frequencyHours * 60)} minutes`
-        : `${frequencyHours} hour(s)`;
-
-    if (frequencyHours < 1) {
-      triggerBuilder.everyMinutes(Math.round(frequencyHours * 60));
-    } else {
-      triggerBuilder.everyHours(frequencyHours);
-    }
-    triggerBuilder.create();
-    console.log(`Trigger created for ${functionName} to run every ${frequencyText}.`);
-  });
+  // Create triggers to run once per hour between 9am and 6pm (18:00).
+  for (let hour = 9; hour <= 18; hour++) {
+    ScriptApp.newTrigger('processAll')
+        .timeBased()
+        .atHour(hour)
+        .nearMinute(0) // Run at the beginning of the hour
+        .everyDays(1)
+        .create();
+  }
+  console.log('Created triggers to run once per hour between 9am and 6pm.');
   
   console.log('All triggers have been set up successfully.');
 }
