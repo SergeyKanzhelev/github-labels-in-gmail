@@ -79,6 +79,35 @@ function processGitHubEmails() {
       threadsConsidered++;
       try {
         const message = thread.getMessages().pop();
+
+        // Handle Pull Request Status
+        const prStatus = getGitHubPullRequestStatusHeader(message);
+        if (prStatus) {
+          thread.addLabel(getOrCreateLabel('pr'));
+          labelsAppliedCount++;
+          if (prStatus.toLowerCase() === 'merged') {
+            thread.addLabel(getOrCreateLabel('k8s/merged'));
+            console.log(`Thread ${thread.getId()}: Applied k8s/merged label`);
+            labelsAppliedCount++;
+          } else if (prStatus.toLowerCase() === 'closed') {
+            thread.addLabel(getOrCreateLabel('k8s/closed'));
+            console.log(`Thread ${thread.getId()}: Applied k8s/closed label`);
+            labelsAppliedCount++;
+          }
+        }
+
+        // Handle Issue State
+        const issueState = getGitHubIssueStateHeader(message);
+        if (issueState) {
+          thread.addLabel(getOrCreateLabel('issue'));
+          labelsAppliedCount++;
+          if (issueState.toLowerCase() === 'closed') {
+            thread.addLabel(getOrCreateLabel('k8s/closed'));
+            console.log(`Thread ${thread.getId()}: Applied k8s/closed label (issue closed)`);
+            labelsAppliedCount++;
+          }
+        }
+
         const header = getGitHubLabelsHeader(message);
         if (!header) {
           return;
@@ -175,6 +204,35 @@ function reprocessMissingSigLabels() {
       threadsConsidered++;
       try {
         const message = thread.getMessages().pop();
+
+        // Handle Pull Request Status
+        const prStatus = getGitHubPullRequestStatusHeader(message);
+        if (prStatus) {
+          thread.addLabel(getOrCreateLabel('pr'));
+          labelsReappliedCount++;
+          if (prStatus.toLowerCase() === 'merged') {
+            thread.addLabel(getOrCreateLabel('k8s/merged'));
+            console.log(`Thread ${thread.getId()}: Applied k8s/merged label`);
+            labelsReappliedCount++;
+          } else if (prStatus.toLowerCase() === 'closed') {
+            thread.addLabel(getOrCreateLabel('k8s/closed'));
+            console.log(`Thread ${thread.getId()}: Applied k8s/closed label`);
+            labelsReappliedCount++;
+          }
+        }
+
+        // Handle Issue State
+        const issueState = getGitHubIssueStateHeader(message);
+        if (issueState) {
+          thread.addLabel(getOrCreateLabel('issue'));
+          labelsReappliedCount++;
+          if (issueState.toLowerCase() === 'closed') {
+            thread.addLabel(getOrCreateLabel('k8s/closed'));
+            console.log(`Thread ${thread.getId()}: Applied k8s/closed label (issue closed)`);
+            labelsReappliedCount++;
+          }
+        }
+
         const header = getGitHubLabelsHeader(message);
         if (!header) {
           return; // Nothing to do if no labels header
@@ -233,6 +291,26 @@ function getGitHubLabelsHeader(message) {
 
   const raw = message.getRawContent();
   return extractFoldedHeader(raw, 'x-github-labels');
+}
+
+function getGitHubPullRequestStatusHeader(message) {
+  const direct =
+    message.getHeader('X-GitHub-PullRequestStatus') ||
+    message.getHeader('X-Github-PullRequestStatus');
+  if (direct) return direct;
+
+  const raw = message.getRawContent();
+  return extractFoldedHeader(raw, 'x-github-pullrequeststatus');
+}
+
+function getGitHubIssueStateHeader(message) {
+  const direct =
+    message.getHeader('X-GitHub-IssueState') ||
+    message.getHeader('X-Github-IssueState');
+  if (direct) return direct;
+
+  const raw = message.getRawContent();
+  return extractFoldedHeader(raw, 'x-github-issuestate');
 }
 
 function extractFoldedHeader(raw, headerNameLower) {
