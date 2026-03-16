@@ -133,7 +133,7 @@ function processGitHubEmails() {
           if (key === 'needs-sig') {
             hasNeedsSig = true;
           }
-          if (key.startsWith('sig/')) {
+          if (key.startsWith('sig/') || key.startsWith('wg/')) {
             hasSigLabel = true;
             if (!isAllowed(lbl)) {
               hasOtherSig = true;
@@ -175,9 +175,12 @@ function reprocessMissingSigLabels() {
   const otherSigLabel = getOrCreateLabel(otherSigLabelName);
   let query = `label:"${PROCESSED}" -label:"${otherSigLabelName}"`;
 
-  // Exclude threads that already have an allowed sig label.
-  const allowedSigs = ALLOW.filter(p => p.toLowerCase().startsWith('sig/'));
-  for (const pat of allowedSigs) {
+  // Exclude threads that already have an allowed sig or wg label.
+  const allowedGroups = ALLOW.filter(p => {
+    const lp = p.toLowerCase();
+    return lp.startsWith('sig/') || lp.startsWith('wg/');
+  });
+  for (const pat of allowedGroups) {
     let labelName = pat.toLowerCase();
     // For globs like 'sig/docs*', we exclude the base label name. This isn't perfect
     // but prevents reprocessing for the most common cases.
@@ -253,7 +256,7 @@ function reprocessMissingSigLabels() {
           if (seen.has(key)) continue;
           seen.add(key);
 
-          if (key.startsWith('sig/')) {
+          if (key.startsWith('sig/') || key.startsWith('wg/')) {
             if (!isAllowed(lbl)) {
               hasOtherSig = true;
             } else {
