@@ -1,62 +1,7 @@
 /**
- * GitHub → Gmail (labels-only, allow-list + ; parsing)
- * - Reads X-GitHub-Labels (case-insensitive, folded headers OK)
- * - Parses labels separated by ";" or "," (outside quotes)
- * - Applies ONLY labels that match ALLOW (exact or prefix* glob)
- * - Applies Gmail labels as: gh/<original-label>
- * - Marks threads with gh/processed so we don't reprocess
+ * Implementation of GitHub email processing.
  */
-
-const QUERY        = 'from:notifications@github.com newer_than:30d -label:"gh/processed"';
-const MAX_THREADS  = 500;
-const ROOT_PREFIX  = 'gh/';
-const PROCESSED    = 'gh/processed';
-const KEEP_SLASHES = true; // true -> nested labels (gh/area/kubelet). false -> replace "/" with fullwidth slash.
-
-/**
- * EXPLICIT allow-list. Only labels matching one of these patterns will be applied.
- * Matching is case-insensitive.
- * - Exact: "kind/bug"
- * - Prefix glob: "sig/docs*" matches "sig/docs" and "sig/docs/anything"
- * Examples below — edit for your needs.
- */
-const ALLOW = [
-  'kind/bug',
-  'kind/cleanup',
-  'kind/documentation',
-  'sig/node',
-  'lgtm',
-  'approved',
-  'do-not-merge/work-in-progress',
-];
-
-// Global cache for Gmail labels to avoid API limits.
-const LABEL_CACHE = {};
-let IS_CACHE_INITIALIZED = false;
-
-/**
- * Initializes the label cache by fetching all user labels from Gmail.
- * This should be called once at the beginning of any script execution.
- * @returns {boolean} True if the cache was initialized successfully, false otherwise.
- */
-function initLabelCache() {
-  if (IS_CACHE_INITIALIZED) {
-    return true;
-  }
-  try {
-    GmailApp.getUserLabels().forEach(label => {
-      LABEL_CACHE[label.getName()] = label;
-    });
-    IS_CACHE_INITIALIZED = true;
-    console.log('Label cache initialized successfully.');
-    return true;
-  } catch (e) {
-    console.log(`FATAL: Error initializing label cache: ${e.message}. Aborting execution.`);
-    return false;
-  }
-}
-
-function processGitHubEmails() {
+function processGitHubEmailsImpl() {
   if (!initLabelCache()) {
     return; // Exit if cache initialization fails.
   }
@@ -167,7 +112,7 @@ function processGitHubEmails() {
   console.log(`Processing complete. Considered: ${threadsConsidered}, Processed: ${processedCount}, Labels applied: ${labelsAppliedCount}`);
 }
 
-function reprocessMissingSigLabels() {
+function reprocessMissingSigLabelsImpl() {
   if (!initLabelCache()) {
     return; // Exit if cache initialization fails.
   }
@@ -283,8 +228,6 @@ function reprocessMissingSigLabels() {
   console.log(`Reprocessing complete. Re-evaluated: ${threadsConsidered}, Labels re-applied: ${labelsReappliedCount}`);
 }
 
-// ---- Helpers ----
-
 // Case-insensitive header fetch with folded-lines fallback
 function getGitHubLabelsHeader(message) {
   const direct =
@@ -314,158 +257,4 @@ function getGitHubIssueStateHeader(message) {
 
   const raw = message.getRawContent();
   return extractFoldedHeader(raw, 'x-github-issuestate');
-}
-
-function extractFoldedHeader(raw, headerNameLower) {
-  const lines = raw.split(/\r?\n/);
-  let collecting = false, value = '';
-  const startRe = new RegExp(`^${escapeRe(headerNameLower)}\\s*:`, 'i');
-  for (let i = 0; i < lines.length; i++) {
-    const line = lines[i];
-    if (!collecting) {
-      if (startRe.test(line)) {
-        collecting = true;
-        value = line.replace(startRe, '').trim();
-      }
-    } else {
-      if (/^[ \t]/.test(line)) {
-        value += ' ' + line.trim();
-      } else {
-        break;
-      }
-    }
-  }
-  return value || null;
-}
-
-// Split on any of the delimiters provided (e.g., ";" or ",") outside quotes.
-// Supports double-quote escaping with "" inside quoted segments.
-function splitQuotedMulti(input, delimiters) {
-  if (!input) return [];
-  const delimSet = new Set(delimiters);
-  const out = [];
-  let cur = '';
-  let inQ = false;
-
-  for (let i = 0; i < input.length; i++) {
-    const ch = input[i];
-
-    if (ch === '"') {
-      if (inQ && input[i + 1] === '"') { // escaped quote
-        cur += '"'; i++;
-      } else {
-        inQ = !inQ;
-      }
-      continue;
-    }
-
-    if (!inQ && delimSet.has(ch)) {
-      out.push(cur.trim());
-      cur = '';
-      continue;
-    }
-
-    cur += ch;
-  }
-  if (cur.trim()) out.push(cur.trim());
-  return out.filter(Boolean);
-}
-
-// Allow-list matcher: case-insensitive exact or prefix* glob
-function isAllowed(label) {
-  const ll = label.toLowerCase();
-  for (const pat of ALLOW) {
-    const p = String(pat || '').toLowerCase().trim();
-    if (!p) continue;
-
-    if (p.endsWith('*')) {
-      const prefix = p.slice(0, -1);
-      if (ll.startsWith(prefix)) return true;
-    } else if (ll === p) {
-      return true;
-    }
-  }
-  return false;
-}
-
-/**
- * Gets a Gmail label by name from the cache, creating it if it doesn't exist.
- * Relies on the global LABEL_CACHE, which must be initialized first via initLabelCache().
- * @param {string} name The name of the label.
- * @returns {GmailApp.Label} The label object.
- */
-function getOrCreateLabel(name) {
-  if (LABEL_CACHE[name]) {
-    return LABEL_CACHE[name];
-  }
-  // If it's not in the cache, it needs to be created.
-  try {
-    const label = GmailApp.createLabel(name);
-    LABEL_CACHE[name] = label;
-    return label;
-  } catch (e) {
-    console.log(`Error creating label "${name}": ${e.message}`);
-    throw e; // Re-throw, as this is a significant issue during processing.
-  }
-}
-
-// Centralized label name formatter
-function formatLabelName(label) {
-  const finalSegment = KEEP_SLASHES ? label : label.replace(/\//g, '／');
-  return `${ROOT_PREFIX}${finalSegment}`;
-}
-
-
-function escapeRe(s) {
-  return String(s).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-}
-
-/**
- * Wrapper function to run all processing tasks.
- * This is the target for all time-based triggers.
- */
-function processAll() {
-  processGitHubEmails();
-  reprocessMissingSigLabels();
-}
-
-/**
- * Creates triggers to run the script on a schedule.
- * Deletes any existing triggers before creating new ones.
- *
- * The script will run:
- * - Every 10 minutes between 8:00 AM and 8:50 AM.
- * - Every hour between 9:00 AM and 6:00 PM (18:00).
- */
-function setup() {
-  // Deletes all triggers in the current project.
-  const triggers = ScriptApp.getProjectTriggers();
-  for (const trigger of triggers) {
-    ScriptApp.deleteTrigger(trigger);
-  }
-  console.log('Deleted all existing triggers.');
-
-  // Create triggers to run every 10 minutes between 8am and 9am.
-  for (let minute = 0; minute < 60; minute += 10) {
-    ScriptApp.newTrigger('processAll')
-        .timeBased()
-        .atHour(8)
-        .nearMinute(minute)
-        .everyDays(1)
-        .create();
-  }
-  console.log('Created triggers to run every 10 minutes between 8am and 9am.');
-
-  // Create triggers to run once per hour between 9am and 6pm (18:00).
-  for (let hour = 9; hour <= 18; hour++) {
-    ScriptApp.newTrigger('processAll')
-        .timeBased()
-        .atHour(hour)
-        .nearMinute(0) // Run at the beginning of the hour
-        .everyDays(1)
-        .create();
-  }
-  console.log('Created triggers to run once per hour between 9am and 6pm.');
-  
-  console.log('All triggers have been set up successfully.');
 }

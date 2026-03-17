@@ -12,6 +12,7 @@ Inspired by: https://gist.github.com/jimangel/457068192e616029bd2564585a45ddd0
 * Splits labels on **`;` or `,`** (outside quotes) and handles `""` escaped quotes.
 * Applies Gmail labels as `gh/<original-label>` (keeps `/` nesting by default).
 * **Allow-list only**: labels are applied **only** if they match your patterns.
+* **Utility**: `logGmailFilters` reads all your Gmail filters and logs them to the console.
 
 **Example Gmail searches**
 
@@ -35,7 +36,7 @@ Inspired by: https://gist.github.com/jimangel/457068192e616029bd2564585a45ddd0
 
 <img width="795" height="414" alt="image" src="https://gist.github.com/user-attachments/assets/9b6f6826-aee4-4c29-8598-722f58b5e8ee" />
 
-1. In the functions dropdown (bar), choose **`test`** (or `processGitHubEmails`) → **Run** → authorize → **Allow**.
+1. In the functions dropdown (bar), choose **`processGitHubEmails`** → **Run** → authorize → **Allow**.
 2. Check **View → Executions** (or **Logs**) for results.
 
 > On first run, labels are created on demand.
@@ -47,7 +48,7 @@ After the first run, you need to set up a trigger to run the script automaticall
 1. In the functions dropdown, choose **`setup`** → **Run**.
 2. Authorize the script if prompted (this requires the `script.scriptapp` scope).
 
-This will create a time-based trigger that runs `processGitHubEmails` every 5 minutes. You only need to run `setup` once.
+This will create time-based triggers that run `processAll` on a regular schedule (8-9am every 10 mins, then hourly until 6pm). You only need to run `setup` once.
 
 ## Testing & Verification
 
