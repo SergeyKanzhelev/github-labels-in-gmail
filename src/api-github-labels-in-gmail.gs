@@ -4,6 +4,7 @@
  * Implementation details are located in the other .gs files.
  */
 
+
 function processGitHubEmails() {
   processGitHubEmailsImpl();
 }
