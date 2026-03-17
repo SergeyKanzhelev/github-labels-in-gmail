@@ -9,17 +9,12 @@ function processGitHubEmails() {
   processGitHubEmailsImpl();
 }
 
-function reprocessMissingSigLabels() {
-  reprocessMissingSigLabelsImpl();
-}
-
 /**
  * Wrapper function to run all processing tasks.
  * This is the target for all time-based triggers.
  */
 function processAll() {
   processGitHubEmailsImpl();
-  reprocessMissingSigLabelsImpl();
 }
 
 /**
