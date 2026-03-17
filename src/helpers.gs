@@ -101,6 +101,76 @@ function splitQuotedMulti(input, delimiters) {
   return out.filter(Boolean);
 }
 
+/**
+ * Wraps a Gmail thread and its last message into a context object for GitHub processing.
+ * Parses relevant headers once and gathers existing labels.
+ */
+function createGitHubMessageContext(thread) {
+  const message = thread.getMessages().pop();
+  const existingLabels = new Set(thread.getLabels().map(l => l.getName()));
+  
+  const rawLabelsHeader = getGitHubLabelsHeader(message);
+  const githubLabels = splitQuotedMulti(rawLabelsHeader, [';', ',']);
+  
+  return {
+    thread: thread,
+    message: message,
+    existingLabels: existingLabels,
+    githubLabels: githubLabels,
+    prStatus: getGitHubPullRequestStatusHeader(message),
+    issueState: getGitHubIssueStateHeader(message),
+    
+    // Internal state trackers for processing
+    appliedLabelsCount: 0,
+    
+    /**
+     * Adds a label to the thread only if it's not already present.
+     * Updates appliedLabelsCount if a change was made.
+     */
+    addLabel: function(labelName) {
+      if (this.existingLabels.has(labelName)) {
+        return false;
+      }
+      const label = getOrCreateLabel(labelName);
+      this.thread.addLabel(label);
+      this.existingLabels.add(labelName);
+      this.appliedLabelsCount++;
+      return true;
+    }
+  };
+}
+
+// Case-insensitive header fetch with folded-lines fallback
+function getGitHubLabelsHeader(message) {
+  const direct =
+    message.getHeader('X-GitHub-Labels') ||
+    message.getHeader('X-Github-Labels');
+  if (direct) return direct;
+
+  const raw = message.getRawContent();
+  return extractFoldedHeader(raw, 'x-github-labels');
+}
+
+function getGitHubPullRequestStatusHeader(message) {
+  const direct =
+    message.getHeader('X-GitHub-PullRequestStatus') ||
+    message.getHeader('X-GitHub-PullRequestStatus');
+  if (direct) return direct;
+
+  const raw = message.getRawContent();
+  return extractFoldedHeader(raw, 'x-github-pullrequeststatus');
+}
+
+function getGitHubIssueStateHeader(message) {
+  const direct =
+    message.getHeader('X-GitHub-IssueState') ||
+    message.getHeader('X-Github-IssueState');
+  if (direct) return direct;
+
+  const raw = message.getRawContent();
+  return extractFoldedHeader(raw, 'x-github-issuestate');
+}
+
 function extractFoldedHeader(raw, headerNameLower) {
   const lines = raw.split(/\r?\n/);
   let collecting = false, value = '';
