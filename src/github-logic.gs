@@ -88,7 +88,8 @@ function processGitHubEmailsImpl() {
         }
 
         const seen = new Set();
-        let hasSigLabel = false;
+        let sigCount = 0;
+        let allowedSigs = [];
         let hasOtherSig = false;
         let hasAllowedSig = false;
 
@@ -101,11 +102,12 @@ function processGitHubEmailsImpl() {
           seen.add(key);
 
           if (key.startsWith('sig/') || key.startsWith('wg/')) {
-            hasSigLabel = true;
+            sigCount++;
             if (!isAllowed(lbl)) {
               hasOtherSig = true;
             } else {
-              hasAllowedSig = true
+              hasAllowedSig = true;
+              allowedSigs.push(lbl);
             }
           }
 
@@ -116,6 +118,14 @@ function processGitHubEmailsImpl() {
 
         if (hasOtherSig && !hasAllowedSig) {
           ctx.addLabel(`${ROOT_PREFIX}other-sig`);
+        }
+
+        if (sigCount === 1 && allowedSigs.length === 1) {
+          ctx.addLabel(formatLabelName(`only/${allowedSigs[0]}`));
+        }
+
+        if (sigCount >= 3) {
+          ctx.addLabel(formatLabelName('many/sigs'));
         }
 
         labelsAppliedCount += ctx.appliedLabelsCount;
