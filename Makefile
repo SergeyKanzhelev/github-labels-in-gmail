@@ -1,4 +1,4 @@
-.PHONY: login create push
+.PHONY: login create push refresh
 
 all: install
 
@@ -13,3 +13,6 @@ create: install
 
 push: install
 	npx clasp push --force
+
+refresh:
+	bash generate-closed-data.sh

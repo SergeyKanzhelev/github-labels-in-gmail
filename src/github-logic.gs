@@ -68,6 +68,20 @@ function processGitHubEmailsImpl() {
           }
         }
 
+        // Fallback: check prepackaged closed/merged data when headers don't indicate status
+        if (!ctx.existingLabels.has('k8s/merged') && !ctx.existingLabels.has('k8s/closed')) {
+          const closedStatus = getClosedStatus(thread.getFirstMessageSubject());
+          if (closedStatus === 'merged') {
+            if (ctx.addLabel('k8s/merged')) {
+              console.log(`Thread ${thread.getId()}: Applied k8s/merged from prepackaged data`);
+            }
+          } else if (closedStatus === 'closed') {
+            if (ctx.addLabel('k8s/closed')) {
+              console.log(`Thread ${thread.getId()}: Applied k8s/closed from prepackaged data`);
+            }
+          }
+        }
+
         if (ctx.githubLabels.length === 0) {
           labelsAppliedCount += ctx.appliedLabelsCount;
           return;

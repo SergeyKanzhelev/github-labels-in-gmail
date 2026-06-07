@@ -196,3 +196,36 @@ function extractFoldedHeader(raw, headerNameLower) {
 function escapeRe(s) {
   return String(s).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
+
+/**
+ * Extracts "org/repo#number" from a GitHub notification email subject.
+ * Subjects look like:
+ *   "[kubernetes/enhancements] KEP-3085: prepare for GA (PR #6167)"
+ *   "Re: [kubernetes/node-problem-detector] CVEs in v1.35.2 (Issue #1277)"
+ */
+function extractIssueKey(subject) {
+  if (!subject) return null;
+  const repoMatch = subject.match(/\[([^\]]+\/[^\]]+)\]/);
+  const numMatch = subject.match(/\((?:Issue|PR) #(\d+)\)/);
+  if (repoMatch && numMatch) {
+    return repoMatch[1] + '#' + numMatch[1];
+  }
+  return null;
+}
+
+/**
+ * Looks up an issue/PR in the prepackaged CLOSED_ITEMS map.
+ * Returns "closed", "merged", or null.
+ */
+function getClosedStatus(subject) {
+  if (typeof CLOSED_ITEMS === 'undefined') return null;
+  const key = extractIssueKey(subject);
+  if (!key) return null;
+  const [repo, numStr] = key.split('#');
+  const num = parseInt(numStr, 10);
+  const entry = CLOSED_ITEMS[repo];
+  if (!entry) return null;
+  if (entry.merged && entry.merged.includes(num)) return 'merged';
+  if (entry.closed && entry.closed.includes(num)) return 'closed';
+  return null;
+}
