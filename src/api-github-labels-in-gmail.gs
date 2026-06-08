@@ -36,17 +36,22 @@ function applyGmailFiltersReconciliation() {
 }
 
 /**
- * Creates triggers to run the script on a schedule.
- * Deletes any existing triggers before creating new ones.
+ * Deletes all triggers in the current project.
  */
-function setup() {
-  // Deletes all triggers in the current project.
+function deleteTriggers() {
   const triggers = ScriptApp.getProjectTriggers();
   for (const trigger of triggers) {
     ScriptApp.deleteTrigger(trigger);
   }
-  console.log('Deleted all existing triggers.');
+  console.log(`Deleted ${triggers.length} trigger(s).`);
+}
 
+/**
+ * Creates triggers to run the script on a schedule.
+ * Deletes any existing triggers before creating new ones.
+ */
+function setup() {
+  deleteTriggers();
   // Create triggers to run every 10 minutes between 8am and 9am.
   for (let minute = 0; minute < 60; minute += 10) {
     ScriptApp.newTrigger('processAll')
