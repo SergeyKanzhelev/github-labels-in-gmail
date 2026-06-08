@@ -70,15 +70,19 @@ function processGitHubEmailsImpl() {
 
         // Fallback: check prepackaged closed/merged data when headers don't indicate status
         if (!ctx.existingLabels.has('k8s/merged') && !ctx.existingLabels.has('k8s/closed')) {
-          const closedStatus = getClosedStatus(thread.getFirstMessageSubject());
+          const subject = thread.getFirstMessageSubject();
+          const issueKey = extractIssueKey(subject);
+          const closedStatus = getClosedStatus(subject);
           if (closedStatus === 'merged') {
             if (ctx.addLabel('k8s/merged')) {
-              console.log(`Thread ${thread.getId()}: Applied k8s/merged from prepackaged data`);
+              console.log(`Thread ${thread.getId()}: Applied k8s/merged from prepackaged data (${issueKey})`);
             }
           } else if (closedStatus === 'closed') {
             if (ctx.addLabel('k8s/closed')) {
-              console.log(`Thread ${thread.getId()}: Applied k8s/closed from prepackaged data`);
+              console.log(`Thread ${thread.getId()}: Applied k8s/closed from prepackaged data (${issueKey})`);
             }
+          } else if (issueKey) {
+            console.log(`Thread ${thread.getId()}: Not found in prepackaged data (${issueKey})`);
           }
         }
 

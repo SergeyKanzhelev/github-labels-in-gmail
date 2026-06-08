@@ -36,6 +36,68 @@ function applyGmailFiltersReconciliation() {
 }
 
 /**
+ * Process old GitHub email threads (older than 300 days) to test prepackaged closed data.
+ * Searches for threads from the past 2 years, skipping the ones already covered by the main query.
+ */
+function processOldThreads() {
+  if (!initLabelCache()) {
+    return;
+  }
+  const query = 'from:notifications@github.com older_than:150d';
+  let offset = 0;
+  let threads;
+
+  let matched = 0;
+  let notFound = 0;
+  let skipped = 0;
+  let total = 0;
+
+  while (true) {
+    threads = GmailApp.search(query, offset, MAX_THREADS);
+    if (threads.length === 0) {
+      break;
+    }
+    offset += threads.length;
+
+    threads.forEach(thread => {
+      total++;
+      try {
+        const subject = thread.getFirstMessageSubject();
+        const issueKey = extractIssueKey(subject);
+        const existingLabels = new Set(thread.getLabels().map(l => l.getName()));
+
+        if (existingLabels.has('k8s/merged') || existingLabels.has('k8s/closed')) {
+          skipped++;
+          return; // already labeled
+        }
+
+        const closedStatus = getClosedStatus(subject);
+        if (closedStatus === 'merged') {
+          const label = getOrCreateLabel('k8s/merged');
+          thread.addLabel(label);
+          console.log(`OLD Thread ${thread.getId()}: Applied k8s/merged (${issueKey}) — "${subject}"`);
+          matched++;
+        } else if (closedStatus === 'closed') {
+          const label = getOrCreateLabel('k8s/closed');
+          thread.addLabel(label);
+          console.log(`OLD Thread ${thread.getId()}: Applied k8s/closed (${issueKey}) — "${subject}"`);
+          matched++;
+        } else {
+          console.log(`OLD Thread ${thread.getId()}: No match (${issueKey || 'no key'}) — "${subject}"`);
+          notFound++;
+        }
+      } catch (e) {
+        console.log(`Error processing old thread ${thread.getId()}: ${e && e.message}`);
+      }
+    });
+
+    console.log(`Progress: processed ${total} threads so far (matched: ${matched}, skipped: ${skipped}, not found: ${notFound})`);
+  }
+
+  console.log(`Old threads done. Total: ${total}, Matched: ${matched}, Skipped: ${skipped}, Not found: ${notFound}`);
+}
+
+/**
  * Deletes all triggers in the current project.
  */
 function deleteTriggers() {
