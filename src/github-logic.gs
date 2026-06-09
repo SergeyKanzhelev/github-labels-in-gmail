@@ -41,20 +41,22 @@ function processGitHubEmailsImpl() {
 
     threads.forEach(thread => {
       threadsConsidered++;
+      const subject = thread.getFirstMessageSubject();
+      const log = [];  // accumulate decisions for this thread
+
       try {
         const ctx = createGitHubMessageContext(thread);
 
         // Handle Pull Request Status
         if (ctx.prStatus) {
           ctx.addLabel('pr');
-          if (ctx.prStatus.toLowerCase() === 'merged') {
-            if (ctx.addLabel('k8s/merged')) {
-              console.log(`Thread ${thread.getId()}: Applied k8s/merged label`);
-            }
-          } else if (ctx.prStatus.toLowerCase() === 'closed') {
-            if (ctx.addLabel('k8s/closed')) {
-              console.log(`Thread ${thread.getId()}: Applied k8s/closed label`);
-            }
+          const status = ctx.prStatus.toLowerCase();
+          if (status === 'merged') {
+            log.push(ctx.addLabel('k8s/merged') ? '+k8s/merged (PR)' : 'already k8s/merged');
+          } else if (status === 'closed') {
+            log.push(ctx.addLabel('k8s/closed') ? '+k8s/closed (PR)' : 'already k8s/closed');
+          } else {
+            log.push(`PR status: ${ctx.prStatus}`);
           }
         }
 
@@ -62,80 +64,93 @@ function processGitHubEmailsImpl() {
         if (ctx.issueState) {
           ctx.addLabel('issue');
           if (ctx.issueState.toLowerCase() === 'closed') {
-            if (ctx.addLabel('k8s/closed')) {
-              console.log(`Thread ${thread.getId()}: Applied k8s/closed label (issue closed)`);
-            }
+            log.push(ctx.addLabel('k8s/closed') ? '+k8s/closed (issue)' : 'already k8s/closed');
+          } else {
+            log.push(`issue state: ${ctx.issueState}`);
           }
         }
 
         // Fallback: check prepackaged closed/merged data when headers don't indicate status
         if (!ctx.existingLabels.has('k8s/merged') && !ctx.existingLabels.has('k8s/closed')) {
-          const subject = thread.getFirstMessageSubject();
           const issueKey = extractIssueKey(subject);
           const closedStatus = getClosedStatus(subject);
           if (closedStatus === 'merged') {
-            if (ctx.addLabel('k8s/merged')) {
-              console.log(`Thread ${thread.getId()}: Applied k8s/merged from prepackaged data (${issueKey})`);
-            }
+            log.push(ctx.addLabel('k8s/merged') ? `+k8s/merged (prepackaged ${issueKey})` : 'already k8s/merged');
           } else if (closedStatus === 'closed') {
-            if (ctx.addLabel('k8s/closed')) {
-              console.log(`Thread ${thread.getId()}: Applied k8s/closed from prepackaged data (${issueKey})`);
-            }
+            log.push(ctx.addLabel('k8s/closed') ? `+k8s/closed (prepackaged ${issueKey})` : 'already k8s/closed');
           } else if (issueKey) {
-            console.log(`Thread ${thread.getId()}: Not found in prepackaged data (${issueKey})`);
+            log.push(`${issueKey} not in prepackaged data`);
           }
         }
 
         if (ctx.githubLabels.length === 0) {
-          labelsAppliedCount += ctx.appliedLabelsCount;
-          return;
-        }
+          if (!ctx.prStatus && !ctx.issueState) {
+            log.push('no headers');
+          }
+          log.push('no github labels');
+        } else {
+          const seen = new Set();
+          let sigCount = 0;
+          let allowedSigs = [];
+          let hasOtherSig = false;
+          let hasAllowedSig = false;
+          const skipped = [];
 
-        const seen = new Set();
-        let sigCount = 0;
-        let allowedSigs = [];
-        let hasOtherSig = false;
-        let hasAllowedSig = false;
+          for (const raw of ctx.githubLabels) {
+            const lbl = raw.trim();
+            if (!lbl) continue;
 
-        for (const raw of ctx.githubLabels) {
-          const lbl = raw.trim();
-          if (!lbl) continue;
+            const key = lbl.toLowerCase();
+            if (seen.has(key)) continue;
+            seen.add(key);
 
-          const key = lbl.toLowerCase();
-          if (seen.has(key)) continue;
-          seen.add(key);
+            if (key.startsWith('sig/') || key.startsWith('wg/')) {
+              sigCount++;
+              if (!isAllowed(lbl)) {
+                hasOtherSig = true;
+              } else {
+                hasAllowedSig = true;
+                allowedSigs.push(lbl);
+              }
+            }
 
-          if (key.startsWith('sig/') || key.startsWith('wg/')) {
-            sigCount++;
-            if (!isAllowed(lbl)) {
-              hasOtherSig = true;
+            if (isAllowed(lbl)) {
+              const labelName = formatLabelName(lbl);
+              const applied = ctx.addLabel(labelName);
+              log.push(applied ? `+${labelName}` : `already ${labelName}`);
             } else {
-              hasAllowedSig = true;
-              allowedSigs.push(lbl);
+              skipped.push(lbl);
             }
           }
 
-          if (isAllowed(lbl)) {
-            ctx.addLabel(formatLabelName(lbl));
+          if (hasOtherSig && !hasAllowedSig) {
+            const applied = ctx.addLabel(`${ROOT_PREFIX}other-sig`);
+            log.push(applied ? `+${ROOT_PREFIX}other-sig` : `already ${ROOT_PREFIX}other-sig`);
           }
-        }
 
-        if (hasOtherSig && !hasAllowedSig) {
-          ctx.addLabel(`${ROOT_PREFIX}other-sig`);
-        }
+          if (sigCount === 1 && allowedSigs.length === 1) {
+            const labelName = formatLabelName(`only/${allowedSigs[0]}`);
+            const applied = ctx.addLabel(labelName);
+            log.push(applied ? `+${labelName}` : `already ${labelName}`);
+          }
 
-        if (sigCount === 1 && allowedSigs.length === 1) {
-          ctx.addLabel(formatLabelName(`only/${allowedSigs[0]}`));
-        }
+          if (sigCount >= 3) {
+            const labelName = formatLabelName('many/sigs');
+            const applied = ctx.addLabel(labelName);
+            log.push(applied ? `+${labelName}` : `already ${labelName}`);
+          }
 
-        if (sigCount >= 3) {
-          ctx.addLabel(formatLabelName('many/sigs'));
+          if (skipped.length > 0) {
+            log.push(`skipped[${skipped.join(', ')}]`);
+          }
         }
 
         labelsAppliedCount += ctx.appliedLabelsCount;
       } catch (e) {
-        console.log(`Error processing thread ${thread.getId()}: ${e && e.message}`);
+        log.push(`ERROR: ${e && e.message}`);
       }
+
+      console.log(`[${subject}] ${log.join('; ')}`);
     });
   }
 
