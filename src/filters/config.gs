@@ -154,7 +154,7 @@ const GMAIL_FILTERS = [
   },
   {
     "criteria": {
-      "query": "list:([test-infra.kubernetes.github.com)"
+      "query": "list:(test-infra.kubernetes.github.com)"
     },
     "action": {
       "addLabelNames": [
