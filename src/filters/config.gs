@@ -235,6 +235,21 @@ const GMAIL_FILTERS = [
   },
   {
     "criteria": {
+      "from": "notifications@github.com",
+      "query": "from:(k8s-triage-robot) \"Closing this issue, marking it as Not Planned\""
+    },
+    "action": {
+      "addLabelNames": [
+        "k8s/closed"
+      ],
+      "removeLabelNames": [
+        "ID:UNREAD",
+        "ID:INBOX"
+      ]
+    }
+  },
+  {
+    "criteria": {
       "query": "list:(node-problem-detector.kubernetes.github.com)"
     },
     "action": {
