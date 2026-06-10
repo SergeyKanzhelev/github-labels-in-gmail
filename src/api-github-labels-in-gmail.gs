@@ -36,8 +36,8 @@ function applyGmailFiltersReconciliation() {
 }
 
 /**
- * Process old GitHub email threads (older than 300 days) to test prepackaged closed data.
- * Searches for threads from the past 2 years, skipping the ones already covered by the main query.
+ * Process old GitHub email threads (older than 150 days) using the prepackaged closed data.
+ * Threads already carrying a k8s/merged or k8s/closed label are skipped.
  */
 function processOldThreads() {
   if (!initLabelCache()) {
