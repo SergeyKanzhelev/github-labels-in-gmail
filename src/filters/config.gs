@@ -282,5 +282,15 @@ const GMAIL_FILTERS = [
         "k8s/_repos/GCP/k8s-node-tools"
       ]
     }
+  },
+  {
+    "criteria": {
+      "query": "list:(containerd.containerd.github.com)"
+    },
+    "action": {
+      "addLabelNames": [
+        "containerd"
+      ]
+    }
   }
 ];
