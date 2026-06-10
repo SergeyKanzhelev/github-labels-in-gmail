@@ -54,7 +54,7 @@ for repo in "${REPOS[@]}"; do
     [ -z "$number" ] && continue
     closed_nums="${closed_nums:+$closed_nums,}$number"
     issue_count=$((issue_count + 1))
-  done < <(gh issue list --repo "$repo" --state closed --limit 5000 \
+  done < <(gh issue list --repo "$repo" --state closed --search "closed:>=$SINCE" --limit 5000 \
     --json number --jq '.[].number' 2>/dev/null || true)
   echo "  Issues closed: $issue_count"
 
@@ -70,7 +70,7 @@ for repo in "${REPOS[@]}"; do
       closed_nums="${closed_nums:+$closed_nums,}$number"
       closed_pr_count=$((closed_pr_count + 1))
     fi
-  done < <(gh pr list --repo "$repo" --state closed --limit 5000 \
+  done < <(gh pr list --repo "$repo" --state closed --search "closed:>=$SINCE" --limit 5000 \
     --json number,state --jq '.[] | [.number, .state] | @tsv' 2>/dev/null || true)
   echo "  PRs merged: $merged_count, closed: $closed_pr_count"
 
