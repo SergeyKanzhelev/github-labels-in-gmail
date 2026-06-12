@@ -1,4 +1,4 @@
-.PHONY: login create push refresh
+.PHONY: login create push refresh verify
 
 all: install
 
@@ -16,3 +16,6 @@ push: install
 
 refresh:
 	bash generate-closed-data.sh
+
+verify: install
+	npx eslint src/

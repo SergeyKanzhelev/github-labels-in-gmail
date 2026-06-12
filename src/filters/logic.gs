@@ -121,7 +121,7 @@ function getGmailFiltersDiff() {
       const id = LABEL_CACHE[name].getId();
       idToName[id] = name;
       nameToId[name] = id;
-    } catch (e) {}
+    } catch (_e) { /* label may not exist yet */ }
   });
 
   const formatActionForLog = (action) => {

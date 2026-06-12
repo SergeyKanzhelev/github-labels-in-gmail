@@ -4,6 +4,8 @@
   "description": "An Apps Script to automatically apply Gmail labels from GitHub notification emails.",
   "private": true,
   "devDependencies": {
-    "@google/clasp": "^3.3.0"
+    "@eslint/js": "^10.0.1",
+    "@google/clasp": "^3.3.0",
+    "eslint": "^10.5.0"
   }
 }
