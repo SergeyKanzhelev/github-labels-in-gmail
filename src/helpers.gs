@@ -229,3 +229,33 @@ function getClosedStatus(subject) {
   if (entry.closed && entry.closed.includes(num)) return 'closed';
   return null;
 }
+
+/**
+ * Fetches labels for a GitHub issue/PR via the GitHub API.
+ * Requires GITHUB_TOKEN script property to be set.
+ * @param {string} issueKey "org/repo#number" format
+ * @returns {string[]|null} Array of label names, or null if unavailable.
+ */
+function fetchGitHubLabels(issueKey) {
+  if (!issueKey) return null;
+  const token = PropertiesService.getScriptProperties().getProperty('GITHUB_TOKEN');
+  if (!token) return null;
+
+  const [repo, numStr] = issueKey.split('#');
+  const url = `https://api.github.com/repos/${repo}/issues/${numStr}/labels`;
+  const response = UrlFetchApp.fetch(url, {
+    headers: {
+      'Authorization': `token ${token}`,
+      'Accept': 'application/vnd.github.v3+json',
+    },
+    muteHttpExceptions: true,
+  });
+
+  if (response.getResponseCode() !== 200) {
+    console.log(`GitHub API error ${response.getResponseCode()} for ${issueKey}`);
+    return null;
+  }
+
+  const labels = JSON.parse(response.getContentText());
+  return labels.map(l => l.name);
+}

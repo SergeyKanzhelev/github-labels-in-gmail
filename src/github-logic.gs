@@ -47,6 +47,10 @@ function processGitHubEmailsImpl() {
       try {
         const ctx = createGitHubMessageContext(thread);
 
+        // Detect PR or Issue from subject line as fallback
+        const isPRBySubject = /\(PR #\d+\)\s*$/.test(subject);
+        const isIssueBySubject = /\(Issue #\d+\)\s*$/.test(subject);
+
         // Handle Pull Request Status
         if (ctx.prStatus) {
           ctx.addLabel('pr');
@@ -58,6 +62,9 @@ function processGitHubEmailsImpl() {
           } else {
             log.push(`PR status: ${ctx.prStatus}`);
           }
+        } else if (isPRBySubject) {
+          ctx.addLabel('pr');
+          log.push('PR (detected from subject)');
         }
 
         // Handle Issue State
@@ -68,6 +75,9 @@ function processGitHubEmailsImpl() {
           } else {
             log.push(`issue state: ${ctx.issueState}`);
           }
+        } else if (isIssueBySubject && !isPRBySubject) {
+          ctx.addLabel('issue');
+          log.push('issue (detected from subject)');
         }
 
         // Fallback: check prepackaged closed/merged data when headers don't indicate status
@@ -83,8 +93,18 @@ function processGitHubEmailsImpl() {
           }
         }
 
+        // Fallback: fetch labels from GitHub API if header is missing
         if (ctx.githubLabels.length === 0) {
-          if (!ctx.prStatus && !ctx.issueState) {
+          const issueKey = extractIssueKey(subject);
+          const apiLabels = fetchGitHubLabels(issueKey);
+          if (apiLabels && apiLabels.length > 0) {
+            ctx.githubLabels = apiLabels;
+            log.push(`labels from API (${issueKey})`);
+          }
+        }
+
+        if (ctx.githubLabels.length === 0) {
+          if (!ctx.prStatus && !ctx.issueState && !isPRBySubject && !isIssueBySubject) {
             log.push('no headers');
           }
           log.push('no github labels');
