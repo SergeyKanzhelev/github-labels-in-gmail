@@ -55,8 +55,9 @@ for repo in "${REPOS[@]}"; do
     closed_nums="${closed_nums:+$closed_nums,}$number"
     issue_count=$((issue_count + 1))
   done < <(gh issue list --repo "$repo" --state closed --limit 5000 \
-    --json number --jq '.[].number' 2>/dev/null || true)
+    --search "closed:>=$SINCE" --json number --jq '.[].number' 2>/dev/null || true)
   echo "  Issues closed: $issue_count"
+  [ "$issue_count" -ge 5000 ] && echo "  WARNING: issue results hit the 5000 cap; older items may be missing."
 
   # Closed/merged PRs
   merged_count=0
@@ -71,8 +72,9 @@ for repo in "${REPOS[@]}"; do
       closed_pr_count=$((closed_pr_count + 1))
     fi
   done < <(gh pr list --repo "$repo" --state closed --limit 5000 \
-    --json number,state --jq '.[] | [.number, .state] | @tsv' 2>/dev/null || true)
+    --search "closed:>=$SINCE" --json number,state --jq '.[] | [.number, .state] | @tsv' 2>/dev/null || true)
   echo "  PRs merged: $merged_count, closed: $closed_pr_count"
+  [ "$((merged_count + closed_pr_count))" -ge 5000 ] && echo "  WARNING: PR results hit the 5000 cap; older items may be missing."
 
   repo_total=$((issue_count + merged_count + closed_pr_count))
   total=$((total + repo_total))

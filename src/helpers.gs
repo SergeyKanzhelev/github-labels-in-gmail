@@ -154,7 +154,7 @@ function getGitHubLabelsHeader(message) {
 function getGitHubPullRequestStatusHeader(message) {
   const direct =
     message.getHeader('X-GitHub-PullRequestStatus') ||
-    message.getHeader('X-GitHub-PullRequestStatus');
+    message.getHeader('X-Github-PullRequestStatus');
   if (direct) return direct;
 
   const raw = message.getRawContent();

@@ -154,7 +154,7 @@ const GMAIL_FILTERS = [
   },
   {
     "criteria": {
-      "query": "list:([test-infra.kubernetes.github.com)"
+      "query": "list:(test-infra.kubernetes.github.com)"
     },
     "action": {
       "addLabelNames": [
@@ -280,6 +280,22 @@ const GMAIL_FILTERS = [
     "action": {
       "addLabelNames": [
         "k8s/_repos/GCP/k8s-node-tools"
+      ]
+    }
+  },
+  {
+    // Group all W3C GitHub notifications under a single "w3c" label.
+    // GitHub sets the List-ID header to "<repo>.<owner>.github.com", so every
+    // w3c/* repository (e.g. w3c/webai-roadmap -> webai-roadmap.w3c.github.com)
+    // shares the ".w3c.github.com" list domain. Matching on that domain groups
+    // all current and future w3c repos with one rule.
+    "criteria": {
+      "from": "notifications@github.com",
+      "query": "list:(w3c.github.com)"
+    },
+    "action": {
+      "addLabelNames": [
+        "w3c"
       ]
     }
   }

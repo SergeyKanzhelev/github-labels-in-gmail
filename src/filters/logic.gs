@@ -37,6 +37,27 @@ function applyGmailFiltersReconciliationImpl() {
     return;
   }
 
+  // Ensure every label referenced by a filter we're about to create actually
+  // exists. Gmail's Filters API rejects a create call whose addLabelIds /
+  // removeLabelIds contain an unknown ID, and name->ID resolution below falls
+  // back to the raw name when the label is missing from the cache. Brand-new
+  // labels (e.g. the "w3c" grouping label) would otherwise pass the literal
+  // name through as an ID and the filter would be silently skipped.
+  diff.toCreate.forEach(item => {
+    const action = item.config.action || {};
+    ['addLabelNames', 'removeLabelNames'].forEach(key => {
+      (action[key] || []).forEach(name => {
+        if (name.startsWith('ID:')) return;
+        if (diff.nameToId[name]) return;
+        try {
+          diff.nameToId[name] = getOrCreateLabel(name).getId();
+        } catch (e) {
+          console.log(`❌ Could not create label "${name}": ${e.message}`);
+        }
+      });
+    });
+  });
+
   // 1. Create missing filters
   diff.toCreate.forEach(item => {
     try {
