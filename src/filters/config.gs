@@ -298,5 +298,15 @@ const GMAIL_FILTERS = [
         "w3c"
       ]
     }
+  },
+  {
+    "criteria": {
+      "query": "list:(containerd.containerd.github.com)"
+    },
+    "action": {
+      "addLabelNames": [
+        "containerd"
+      ]
+    }
   }
 ];
