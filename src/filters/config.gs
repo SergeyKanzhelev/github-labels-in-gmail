@@ -4,11 +4,15 @@
  * Use the output from logGmailFilters() to populate this.
  */
 const GMAIL_FILTERS = [
-  // Example:
-  // {
-  //   criteria: { from: 'notifications@github.com', query: 'label:kind/bug' },
-  //   action: { addLabelNames: ['gh/kind/bug'] }
-  // }
+
+  // =========================================================================
+  // Filters based on https://www.kubernetes.dev/docs/comms/notifications/
+  // Some rules are customized from the docs recommendations; differences are
+  // noted inline.
+  // =========================================================================
+
+  // Docs: matches on query only, marks as important.
+  // Ours: also requires from:notifications@github.com, does not mark important.
   {
     "criteria": {
       "from": "notifications@github.com",
@@ -20,6 +24,8 @@ const GMAIL_FILTERS = [
       ]
     }
   },
+  // Docs: matches on to: only, no label.
+  // Ours: also requires from:notifications@github.com, adds "k8s/self" label.
   {
     "criteria": {
       "from": "notifications@github.com",
@@ -35,6 +41,8 @@ const GMAIL_FILTERS = [
       ]
     }
   },
+  // Docs: uses from: field for notifications@github.com.
+  // Ours: puts everything in query, adds "k8s/robot" label.
   {
     "criteria": {
       "query": "(from:(notifications@github.com) (from:(k8s-merge-robot) OR from:(Kubernetes Prow Robot) OR from:(k8s-ci-robot)))"
@@ -49,6 +57,8 @@ const GMAIL_FILTERS = [
       ]
     }
   },
+  // Docs: matches on to: only, no label.
+  // Ours: also requires from:notifications@github.com, adds "k8s/push" label.
   {
     "criteria": {
       "from": "notifications@github.com",
@@ -64,6 +74,8 @@ const GMAIL_FILTERS = [
       ]
     }
   },
+  // Docs: matches on to: only.
+  // Ours: also requires from:notifications@github.com.
   {
     "criteria": {
       "from": "notifications@github.com",
@@ -101,75 +113,15 @@ const GMAIL_FILTERS = [
       ]
     }
   },
+  // Docs: also stars the message.
+  // Ours: does not star.
   {
     "criteria": {
-      "to": "subscribed@noreply.github.com",
-      "from": "notifications@github.com"
-    },
-    "action": {
-      "removeLabelNames": [
-        "ID:INBOX"
-      ]
-    }
-  },
-  {
-    "criteria": {
-      "query": "list:(kubernetes.kubernetes.github.com)"
+      "to": "comment@noreply.github.com"
     },
     "action": {
       "addLabelNames": [
-        "k8s/_repos/k/k"
-      ]
-    }
-  },
-  {
-    "criteria": {
-      "query": "list:(wg-serving.kubernetes-sigs.github.com)"
-    },
-    "action": {
-      "addLabelNames": [
-        "k8s/_repos/wg-serving"
-      ]
-    }
-  },
-  {
-    "criteria": {
-      "query": "list:(enhancements.kubernetes.github.com)"
-    },
-    "action": {
-      "addLabelNames": [
-        "k8s/_repos/enhancements"
-      ]
-    }
-  },
-  {
-    "criteria": {
-      "query": "list:(inference-perf.kubernetes-sigs.github.com)"
-    },
-    "action": {
-      "addLabelNames": [
-        "k8s/_repos/inference-perf"
-      ]
-    }
-  },
-  {
-    "criteria": {
-      "query": "list:(test-infra.kubernetes.github.com)"
-    },
-    "action": {
-      "addLabelNames": [
-        "k8s/_repos/test-infra"
-      ]
-    }
-  },
-  {
-    "criteria": {
-      "from": "notifications@github.com",
-      "subject": "kubeadm OR OpenShift OR CAPZ OR Azure OR OpenShift OR \"Update k8s-staging-test-infra GCR images as needed\" OR etcd OR vSphere OR bump"
-    },
-    "action": {
-      "addLabelNames": [
-        "k8s/low-pri"
+        "gh/commented"
       ]
     }
   },
@@ -185,34 +137,32 @@ const GMAIL_FILTERS = [
   },
   {
     "criteria": {
-      "query": "list:(cri-tools.kubernetes-sigs.github.com)"
+      "to": "subscribed@noreply.github.com",
+      "from": "notifications@github.com"
     },
     "action": {
-      "addLabelNames": [
-        "k8s/_repos/cri-tools"
+      "removeLabelNames": [
+        "ID:INBOX"
       ]
     }
   },
+  // Docs: uses label "k8s/community".
+  // Ours: uses label "k8s/_repos/community" to match repo label convention.
   {
     "criteria": {
-      "query": "\"Merged\" AROUND 1 \"into master\""
+      "query": "list:(community.kubernetes.github.com)"
     },
     "action": {
       "addLabelNames": [
-        "k8s/merged"
+        "k8s/_repos/community"
       ]
     }
   },
-  {
-    "criteria": {
-      "to": "comment@noreply.github.com"
-    },
-    "action": {
-      "addLabelNames": [
-        "gh/commented"
-      ]
-    }
-  },
+
+  // =========================================================================
+  // Custom filters: repo-specific labels
+  // =========================================================================
+
   {
     "criteria": {
       "query": "list:(cadvisor.google.github.com)"
@@ -223,6 +173,111 @@ const GMAIL_FILTERS = [
       ]
     }
   },
+  {
+    "criteria": {
+      "query": "list:(cloud-provider-gcp.kubernetes.github.com)"
+    },
+    "action": {
+      "addLabelNames": [
+        "k8s/_repos/cloud-provider-gcp"
+      ]
+    }
+  },
+  {
+    "criteria": {
+      "query": "list:(cri-tools.kubernetes-sigs.github.com)"
+    },
+    "action": {
+      "addLabelNames": [
+        "k8s/_repos/cri-tools"
+      ]
+    }
+  },
+  {
+    "criteria": {
+      "query": "list:(enhancements.kubernetes.github.com)"
+    },
+    "action": {
+      "addLabelNames": [
+        "k8s/_repos/enhancements"
+      ]
+    }
+  },
+  {
+    "criteria": {
+      "query": "list:(k8s-node-tools.GoogleCloudPlatform.github.com)"
+    },
+    "action": {
+      "addLabelNames": [
+        "k8s/_repos/GCP/k8s-node-tools"
+      ]
+    }
+  },
+  {
+    "criteria": {
+      "query": "list:(kubernetes.kubernetes.github.com)"
+    },
+    "action": {
+      "addLabelNames": [
+        "k8s/_repos/k/k"
+      ]
+    }
+  },
+  {
+    "criteria": {
+      "query": "list:(inference-perf.kubernetes-sigs.github.com)"
+    },
+    "action": {
+      "addLabelNames": [
+        "k8s/_repos/inference-perf"
+      ]
+    }
+  },
+  {
+    "criteria": {
+      "query": "list:(node-problem-detector.kubernetes.github.com)"
+    },
+    "action": {
+      "addLabelNames": [
+        "k8s/_repos/node-problem-detector"
+      ]
+    }
+  },
+  {
+    "criteria": {
+      "query": "list:(test-infra.kubernetes.github.com)"
+    },
+    "action": {
+      "addLabelNames": [
+        "k8s/_repos/test-infra"
+      ]
+    }
+  },
+  {
+    "criteria": {
+      "query": "list:(website.kubernetes.github.com)"
+    },
+    "action": {
+      "addLabelNames": [
+        "k8s/_repos/website"
+      ]
+    }
+  },
+  {
+    "criteria": {
+      "query": "list:(wg-serving.kubernetes-sigs.github.com)"
+    },
+    "action": {
+      "addLabelNames": [
+        "k8s/_repos/wg-serving"
+      ]
+    }
+  },
+
+  // =========================================================================
+  // Custom filters: status and triage
+  // =========================================================================
+
   {
     "criteria": {
       "query": "(\"Closed\" AROUND 1 \"as completed.\") OR (\"Closed\" AROUND 1 \"as not planned.\" ) OR (\"@k8s\\-triage\\-robot\\: Closed this PR.\") OR (\"Closed this PR.\")"
@@ -250,51 +305,37 @@ const GMAIL_FILTERS = [
   },
   {
     "criteria": {
-      "query": "list:(node-problem-detector.kubernetes.github.com)"
+      "from": "notifications@github.com",
+      "subject": "kubeadm OR OpenShift OR CAPZ OR Azure OR OpenShift OR \"Update k8s-staging-test-infra GCR images as needed\" OR etcd OR vSphere OR bump"
     },
     "action": {
       "addLabelNames": [
-        "k8s/_repos/node-problem-detector"
+        "k8s/low-pri"
       ]
     }
   },
   {
     "criteria": {
-      "query": "list:(community.kubernetes.github.com)"
+      "query": "\"Merged\" AROUND 1 \"into master\""
     },
     "action": {
       "addLabelNames": [
-        "k8s/_repos/community"
+        "k8s/merged"
       ]
     }
   },
+
+  // =========================================================================
+  // Custom filters: non-Kubernetes projects
+  // =========================================================================
+
   {
     "criteria": {
-      "query": "list:(cloud-provider-gcp.kubernetes.github.com)"
+      "query": "list:(containerd.containerd.github.com)"
     },
     "action": {
       "addLabelNames": [
-        "k8s/_repos/cloud-provider-gcp"
-      ]
-    }
-  },
-  {
-    "criteria": {
-      "query": "list:(website.kubernetes.github.com)"
-    },
-    "action": {
-      "addLabelNames": [
-        "k8s/_repos/website"
-      ]
-    }
-  },
-  {
-    "criteria": {
-      "query": "list:(k8s-node-tools.GoogleCloudPlatform.github.com)"
-    },
-    "action": {
-      "addLabelNames": [
-        "k8s/_repos/GCP/k8s-node-tools"
+        "containerd"
       ]
     }
   },
@@ -311,16 +352,6 @@ const GMAIL_FILTERS = [
     "action": {
       "addLabelNames": [
         "w3c"
-      ]
-    }
-  },
-  {
-    "criteria": {
-      "query": "list:(containerd.containerd.github.com)"
-    },
-    "action": {
-      "addLabelNames": [
-        "containerd"
       ]
     }
   }
